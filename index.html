@@ -544,6 +544,28 @@ $('#btnReset').addEventListener('click', () => {
 });
 
 /* ---------- Guest RSVP page ---------- */
+/* ---------- Guest RSVP page ---------- */
+function showGuestQr(g, returning = false) {
+  const box = $('#rsvpDone');
+  box.hidden = false;
+  box.innerHTML = `
+    <div style="text-align:center; ${returning ? 'margin-top:24px; padding-top:20px; border-top:1px solid var(--line)' : ''}">
+      <h2>${returning ? 'Your entry QR code' : 'Thank you, ' + esc(g.name) + '!'}</h2>
+      <p class="muted">${returning ? 'Show this at the entrance on the wedding day.' : 'Your reply is saved. Save this QR code and show it at the entrance on the wedding day.'}</p>
+      <div id="myQr" style="display:flex; justify-content:center; margin:16px 0"></div>
+      <div style="font-family:ui-monospace,Menlo,Consolas,monospace; background:var(--info-bg); display:inline-block; padding:4px 10px; border-radius:6px">${esc(g.code)}</div>
+      <div style="margin-top:16px"><button class="btn" id="btnDlQr" type="button">Download QR code</button></div>
+    </div>`;
+  new QRCode($('#myQr'), { text: rsvpLink(g), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  $('#btnDlQr').addEventListener('click', () => {
+    const canvas = $('#myQr canvas'); if (!canvas) return;
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'My-Wedding-QR-' + g.name.replace(/\s+/g, '_') + '.png';
+    a.click();
+  });
+}
+
 function renderRsvp(code) {
   $('#adminApp').hidden = true;
   const app = $('#rsvpApp'); app.hidden = false;
@@ -575,8 +597,13 @@ function renderRsvp(code) {
     </form>
     <div id="rsvpDone" hidden></div>
   </div></div>`;
+
   const toggle = () => $('#yesFields').hidden = (document.querySelector('input[name=att]:checked')?.value === 'declined');
   $$('input[name=att]').forEach(r => r.addEventListener('change', toggle)); toggle();
+
+  // Already confirmed earlier? Show their QR code right away.
+  if (g.status === 'confirmed') showGuestQr(g, true);
+
   $('#rsvpForm').addEventListener('submit', ev => {
     ev.preventDefault();
     const all = db.guests(), me = all.find(x => x.code === g.code);
@@ -588,10 +615,13 @@ function renderRsvp(code) {
     }
     db.saveGuests(all);
     $('#rsvpForm').hidden = true;
-    $('#rsvpDone').hidden = false;
-    $('#rsvpDone').innerHTML = me.status === 'confirmed'
-      ? `<h2>Thank you, ${esc(g.name)}!</h2><p>Your reply is saved. Please show this same QR code at the entrance on the day.</p>`
-      : `<h2>Thank you for letting us know</h2><p>We'll miss you, ${esc(g.name)}.</p>`;
+    if (me.status === 'confirmed') {
+      showGuestQr(g);
+    } else {
+      $('#rsvpDone').hidden = false;
+      $('#rsvpDone').innerHTML = `<h2>Thank you for letting us know</h2><p>We'll miss you, ${esc(g.name)}.</p>`;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
 
