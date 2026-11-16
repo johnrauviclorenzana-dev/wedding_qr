@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Wedding Guest Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #F2F4F3;
+    --surface: #FFFFFF;
+    --ink: #17302A;
+    --muted: #5E6F6A;
+    --line: #D8DFDC;
+    --brand: #1F4D42;
+    --brand-ink: #FFFFFF;
+    --brass: #9A7A3C;
+    --ok: #1F7A4D;
+    --ok-bg: #DDF1E5;
+    --warn: #8A5A00;
+    --warn-bg: #FBEBC8;
+    --bad: #A1332B;
+    --bad-bg: #F7DAD6;
+    --info-bg: #E3EAE7;
+    --serif: "Bodoni Moda", Georgia, "Times New Roman", serif;
+    --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--ink); line-height: 1.5; }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; margin: 0; letter-spacing: .01em; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 60px; }
+
+  /* Header */
+  header.top { background: var(--brand); color: var(--brand-ink); }
+  header.top .wrap { padding-top: 28px; padding-bottom: 0; }
+  .couple { font-size: clamp(30px, 6vw, 52px); line-height: 1.1; }
+  .meta { color: #C9D8D2; margin-top: 6px; font-size: 15px; }
+  nav.tabs { display: flex; gap: 4px; margin-top: 22px; overflow-x: auto; }
+  nav.tabs button {
+    background: transparent; border: 0; color: #C9D8D2; padding: 12px 18px; cursor: pointer;
+    border-bottom: 3px solid transparent; white-space: nowrap; font-weight: 500;
+  }
+  nav.tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--brass); }
+  nav.tabs button:hover { color: #fff; }
+
+  main { padding-top: 28px; }
+  section.panel { display: none; }
+  section.panel.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; margin-bottom: 20px; }
+  .card h2 { font-size: 24px; margin-bottom: 14px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .grow { flex: 1 1 200px; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .stat .n { font-family: var(--serif); font-size: 40px; line-height: 1; }
+  .stat .l { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .stat.hero { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .stat.hero .l { color: #C9D8D2; }
+
+  /* Forms */
+  label { display: block; font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+  input[type=text], input[type=email], input[type=tel], input[type=number], input[type=date], select, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  .field { margin-bottom: 14px; }
+
+  .btn {
+    background: var(--brand); color: var(--brand-ink); border: 1px solid var(--brand);
+    padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 500;
+  }
+  .btn:hover { background: #17392F; }
+  .btn.ghost { background: transparent; color: var(--brand); }
+  .btn.ghost:hover { background: var(--info-bg); }
+  .btn.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .btn.danger:hover { background: var(--bad-bg); }
+  .btn.small { padding: 6px 12px; font-size: 14px; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-weight: 600; color: var(--muted); font-size: 14px; background: #F8FAF9; }
+  td.actions { white-space: nowrap; display: flex; gap: 6px; }
+
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+  .badge.pending { background: var(--info-bg); color: var(--muted); }
+  .badge.confirmed { background: var(--ok-bg); color: var(--ok); }
+  .badge.declined { background: var(--bad-bg); color: var(--bad); }
+  .badge.in { background: var(--brand); color: #fff; }
+
+  .empty { padding: 28px; text-align: center; color: var(--muted); }
+
+  /* Scanner */
+  #reader { width: 100%; max-width: 420px; border-radius: 10px; overflow: hidden; background: #0F1E1A; min-height: 120px; }
+  .result { margin-top: 16px; padding: 16px 18px; border-radius: 10px; border: 1px solid; }
+  .result h3 { font-family: var(--sans); font-weight: 600; font-size: 18px; margin-bottom: 4px; }
+  .result.ok { background: var(--ok-bg); border-color: var(--ok); color: #0F4A2C; }
+  .result.warn { background: var(--warn-bg); border-color: var(--warn); color: #5A3A00; }
+  .result.bad { background: var(--bad-bg); border-color: var(--bad); color: #6E1E18; }
+
+  /* Modal */
+  .modal { position: fixed; inset: 0; background: rgba(15, 30, 26, .6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+  .modal .box { background: #fff; border-radius: 12px; padding: 26px; max-width: 380px; width: 100%; text-align: center; }
+  .modal #qrBox { display: flex; justify-content: center; margin: 16px 0; }
+  .modal .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; background: var(--info-bg); padding: 4px 10px; border-radius: 6px; display: inline-block; }
+
+  /* RSVP page */
+  #rsvpApp { min-height: 100vh; }
+  #rsvpApp .hero { background: var(--brand); color: #fff; text-align: center; padding: 48px 20px 40px; }
+  #rsvpApp .hero p { color: #C9D8D2; margin: 8px 0 0; }
+  #rsvpApp .form-wrap { max-width: 520px; margin: -22px auto 0; padding: 0 16px 50px; }
+  .choice { display: flex; gap: 10px; }
+  .choice label { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; margin: 0; background: #fff; }
+  .choice input { position: absolute; opacity: 0; }
+  .choice input:checked + span { font-weight: 600; }
+  .choice label:has(input:checked) { border-color: var(--brand); background: var(--info-bg); }
+  .choice label:has(input:focus-visible) { outline: 3px solid var(--brass); }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 60; }
+
+  @media print {
+    header.top, nav.tabs, .no-print, .toast { display: none !important; }
+    body { background: #fff; }
+    section.panel { display: none !important; }
+    section#tab-report { display: block !important; }
+    .card { border: 0; padding: 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .result { animation: pop .18s ease-out; }
+    @keyframes pop { from { transform: scale(.98); opacity: .5; } to { transform: none; opacity: 1; } }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ ORGANIZER APP ============ -->
+<div id="adminApp">
+  <header class="top">
+    <div class="wrap">
+      <h1 class="couple" id="hdrCouple">Your Names Here</h1>
+      <div class="meta" id="hdrMeta">Set your wedding details on the Dashboard</div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
+        <button role="tab" data-tab="guests" aria-selected="false">Guest list</button>
+        <button role="tab" data-tab="checkin" aria-selected="false">Check-in</button>
+        <button role="tab" data-tab="report" aria-selected="false">Attendance report</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- Dashboard -->
+    <section class="panel active" id="tab-dashboard">
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <h2>Wedding details</h2>
+        <div class="row">
+          <div class="field grow"><label for="evCouple">Couple names</label><input type="text" id="evCouple" placeholder="Maria &amp; Josh"></div>
+          <div class="field grow"><label for="evDate">Date</label><input type="date" id="evDate"></div>
+          <div class="field grow"><label for="evVenue">Venue</label><input type="text" id="evVenue" placeholder="Venue name, city"></div>
+        </div>
+        <button class="btn" id="saveEvent">Save details</button>
+      </div>
+
+      <div class="card">
+        <h2>Latest check-ins</h2>
+        <div id="recent"></div>
+      </div>
+
+      <div class="card no-print">
+        <h2>Data tools</h2>
+        <p class="muted" style="margin-top:0">Data is stored in this browser only. Back it up before clearing browser data.</p>
+        <div class="row">
+          <button class="btn ghost" id="btnBackup">Download backup (JSON)</button>
+          <button class="btn ghost" id="btnRestore">Restore backup</button>
+          <input type="file" id="fileRestore" accept="application/json" hidden>
+          <button class="btn ghost" id="btnSample">Load sample guests</button>
+          <button class="btn danger" id="btnReset">Delete all data</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Guests -->
+    <section class="panel" id="tab-guests">
+      <div class="card">
+        <h2>Add a guest</h2>
+        <form id="guestForm" autocomplete="off">
+          <div class="row">
+            <div class="field grow"><label for="gName">Full name</label><input type="text" id="gName" required></div>
+            <div class="field grow"><label for="gEmail">Email (optional)</label><input type="email" id="gEmail"></div>
+            <div class="field grow"><label for="gPhone">Phone (optional)</label><input type="tel" id="gPhone"></div>
+            <div class="field" style="flex:0 0 120px"><label for="gTable">Table</label><input type="text" id="gTable" placeholder="e.g. 4"></div>
+          </div>
+          <button class="btn" type="submit">Add guest and create QR</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:end; margin-bottom:12px">
+          <h2 style="margin:0">Guest list</h2>
+          <div class="row">
+            <input type="text" id="search" placeholder="Search name or code" style="width:220px" aria-label="Search guests">
+            <select id="filter" aria-label="Filter by status" style="width:auto">
+              <option value="all">All guests</option>
+              <option value="pending">Waiting for reply</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="declined">Declined</option>
+              <option value="in">Checked in</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" id="guestTable"></div>
+      </div>
+    </section>
+
+    <!-- Check-in -->
+    <section class="panel" id="tab-checkin">
+      <div class="card">
+        <h2>Scan guest QR codes</h2>
+        <p class="muted" style="margin-top:0">Point the camera at a guest's QR code. Camera access needs <code>localhost</code> or <code>https</code>.</p>
+        <div id="reader"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="btnScan">Start camera</button>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+        <form id="manualForm" class="row" style="align-items:end" autocomplete="off">
+          <div class="field grow" style="margin:0"><label for="manualCode">Or type the guest code</label><input type="text" id="manualCode" placeholder="e.g. G7K2QX9"></div>
+          <button class="btn" type="submit">Check in</button>
+        </form>
+        <div id="result"></div>
+      </div>
+    </section>
+
+    <!-- Report -->
+    <section class="panel" id="tab-report">
+      <div class="card">
+        <div class="row no-print" style="justify-content:space-between; align-items:center; margin-bottom:10px">
+          <h2 style="margin:0">Attendance report</h2>
+          <div class="row">
+            <button class="btn ghost" id="btnCsv">Export Excel (CSV)</button>
+            <button class="btn" id="btnPrint">Print or save as PDF</button>
+          </div>
+        </div>
+        <div id="reportHead"></div>
+        <div class="table-wrap" id="reportTable"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ GUEST RSVP PAGE ============ -->
+<div id="rsvpApp" hidden></div>
+
+<!-- QR modal -->
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mName">
+  <div class="box">
+    <h3 id="mName" style="font-size:26px"></h3>
+    <div id="qrBox"></div>
+    <div class="code" id="mCode"></div>
+    <p class="muted" style="font-size:14px">This one QR code is used for both RSVP and event check-in.</p>
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="mDownload">Download PNG</button>
+      <button class="btn ghost" id="mCopy">Copy RSVP link</button>
+      <button class="btn ghost" id="mClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Storage ---------- */
+const KEY_G = 'wqr_guests', KEY_E = 'wqr_event';
+const db = {
+  guests() { try { return JSON.parse(localStorage.getItem(KEY_G)) || []; } catch { return []; } },
+  saveGuests(v) { localStorage.setItem(KEY_G, JSON.stringify(v)); },
+  event() { try { return JSON.parse(localStorage.getItem(KEY_E)) || { couple: '', date: '', venue: '' }; } catch { return { couple: '', date: '', venue: '' }; } },
+  saveEvent(v) { localStorage.setItem(KEY_E, JSON.stringify(v)); }
+};
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const genCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no look-alike characters
+  let c; do { c = 'G' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
+  while (db.guests().some(g => g.code === c));
+  return c;
+};
+const baseUrl = () => location.href.split('?')[0].split('#')[0];
+const rsvpLink = g => baseUrl() + '?rsvp=' + g.code;
+const fmtTime = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString([], { dateStyle: 'long' }) : '';
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status');
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+const statusLabel = { pending: 'Waiting for reply', confirmed: 'Confirmed', declined: 'Declined' };
+
+/* ---------- Tabs ---------- */
+$$('nav.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+function showTab(name) {
+  $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+  $$('section.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name !== 'checkin') stopScan();
+  renderAll();
+}
+
+/* ---------- Render: header, dashboard ---------- */
+function renderHeader() {
+  const e = db.event();
+  $('#hdrCouple').textContent = e.couple || 'Your Names Here';
+  const bits = [fmtDate(e.date), e.venue].filter(Boolean);
+  $('#hdrMeta').textContent = bits.length ? bits.join(' at ') : 'Set your wedding details on the Dashboard';
+  document.title = (e.couple ? e.couple + ' – ' : '') + 'Wedding Guest Manager';
+}
+function counts() {
+  const g = db.guests();
+  return {
+    invited: g.length,
+    confirmed: g.filter(x => x.status === 'confirmed').length,
+    declined: g.filter(x => x.status === 'declined').length,
+    pending: g.filter(x => x.status === 'pending').length,
+    checkedIn: g.filter(x => x.checkedIn).length,
+    headcount: g.filter(x => x.status === 'confirmed').reduce((s, x) => s + (Number(x.pax) || 1), 0)
+  };
+}
+function renderDashboard() {
+  const c = counts();
+  $('#stats').innerHTML = `
+    <div class="stat hero"><div class="n">${c.checkedIn}</div><div class="l">Checked in</div></div>
+    <div class="stat"><div class="n">${c.invited}</div><div class="l">Invited</div></div>
+    <div class="stat"><div class="n">${c.confirmed}</div><div class="l">Confirmed</div></div>
+    <div class="stat"><div class="n">${c.declined}</div><div class="l">Declined</div></div>
+    <div class="stat"><div class="n">${c.pending}</div><div class="l">Waiting for reply</div></div>
+    <div class="stat"><div class="n">${c.headcount}</div><div class="l">Expected headcount</div></div>`;
+  const e = db.event();
+  $('#evCouple').value = e.couple; $('#evDate').value = e.date; $('#evVenue').value = e.venue;
+  const recent = db.guests().filter(g => g.checkedIn).sort((a, b) => b.checkInTime.localeCompare(a.checkInTime)).slice(0, 6);
+  $('#recent').innerHTML = recent.length
+    ? `<table><tbody>${recent.map(g => `<tr><td>${esc(g.name)}</td><td class="muted">${esc(fmtTime(g.checkInTime))}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty">No one has checked in yet.</div>';
+}
+$('#saveEvent').addEventListener('click', () => {
+  db.saveEvent({ couple: $('#evCouple').value.trim(), date: $('#evDate').value, venue: $('#evVenue').value.trim() });
+  renderAll(); toast('Details saved');
+});
+
+/* ---------- Guests ---------- */
+$('#guestForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const name = $('#gName').value.trim();
+  if (!name) return;
+  const guests = db.guests();
+  guests.push({
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+    code: genCode(), name,
+    email: $('#gEmail').value.trim(), phone: $('#gPhone').value.trim(), table: $('#gTable').value.trim(),
+    status: 'pending', pax: 1, note: '', respondedAt: null, checkedIn: false, checkInTime: null
+  });
+  db.saveGuests(guests);
+  ev.target.reset(); renderAll(); toast('Guest added');
+  openQr(guests[guests.length - 1].code);
+});
+$('#search').addEventListener('input', renderGuests);
+$('#filter').addEventListener('change', renderGuests);
+
+function renderGuests() {
+  const q = $('#search').value.trim().toLowerCase(), f = $('#filter').value;
+  const list = db.guests().filter(g => {
+    if (q && !(g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q))) return false;
+    if (f === 'in') return g.checkedIn;
+    return f === 'all' || g.status === f;
+  });
+  if (!list.length) {
+    $('#guestTable').innerHTML = `<div class="empty">${db.guests().length ? 'No guests match your search.' : 'No guests yet. Add your first guest above to create their QR code.'}</div>`;
+    return;
+  }
+  $('#guestTable').innerHTML = `<table>
+    <thead><tr><th>Name</th><th>Table</th><th>Reply</th><th>Guests</th><th>Check-in</th><th></th></tr></thead>
+    <tbody>${list.map(g => `<tr>
+      <td><strong>${esc(g.name)}</strong><br><span class="muted" style="font-size:13px">${esc(g.code)}${g.phone ? ' · ' + esc(g.phone) : ''}</span></td>
+      <td>${esc(g.table) || '–'}</td>
+      <td><span class="badge ${g.status}">${statusLabel[g.status]}</span></td>
+      <td>${g.status === 'confirmed' ? esc(g.pax) : '–'}</td>
+      <td>${g.checkedIn ? `<span class="badge in">${esc(fmtTime(g.checkInTime))}</span>` : '–'}</td>
+      <td class="actions">
+        <button class="btn small" data-qr="${esc(g.code)}">QR code</button>
+        <button class="btn small ghost" data-open="${esc(g.code)}">RSVP page</button>
+        <button class="btn small danger" data-del="${esc(g.id)}">Delete</button>
+      </td></tr>`).join('')}</tbody></table>`;
+}
+$('#guestTable').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.qr) openQr(t.dataset.qr);
+  if (t.dataset.open) window.open(baseUrl() + '?rsvp=' + t.dataset.open, '_blank');
+  if (t.dataset.del && confirm('Delete this guest and their QR code?')) {
+    db.saveGuests(db.guests().filter(g => g.id !== t.dataset.del)); renderAll(); toast('Guest deleted');
+  }
+});
+
+/* ---------- QR modal ---------- */
+let currentQr = null;
+function openQr(code) {
+  const g = db.guests().find(x => x.code === code); if (!g) return;
+  currentQr = g;
+  $('#mName').textContent = g.name; $('#mCode').textContent = g.code;
+  $('#qrBox').innerHTML = '';
+  new QRCode($('#qrBox'), { text: rsvpLink(g), width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  $('#modal').hidden = false; $('#mClose').focus();
+}
+$('#mClose').addEventListener('click', () => $('#modal').hidden = true);
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').hidden = true; });
+$('#mDownload').addEventListener('click', () => {
+  const canvas = $('#qrBox canvas'); if (!canvas) return;
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png'); a.download = 'QR-' + currentQr.name.replace(/\s+/g, '_') + '.png'; a.click();
+});
+$('#mCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(rsvpLink(currentQr)); toast('Link copied'); }
+  catch { prompt('Copy this link:', rsvpLink(currentQr)); }
+});
+
+/* ---------- Check-in ---------- */
+let scanner = null, lastText = '', lastAt = 0;
+function extractCode(raw) {
+  raw = String(raw).trim();
+  try { const c = new URL(raw).searchParams.get('rsvp'); if (c) return c.toUpperCase(); } catch {}
+  return raw.toUpperCase();
+}
+function showResult(kind, title, text, extra = '') {
+  $('#result').innerHTML = `<div class="result ${kind}" role="alert"><h3>${esc(title)}</h3><div>${esc(text)}</div>${extra}</div>`;
+}
+function processCheckIn(raw, force = false) {
+  const code = extractCode(raw);
+  const guests = db.guests();
+  const g = guests.find(x => x.code === code);
+  if (!g) return showResult('bad', 'Not on the guest list', `The code "${code}" doesn't match any invited guest. Do not admit without checking with the couple.`);
+  if (g.checkedIn) return showResult('warn', 'Already checked in', `${g.name} was checked in on ${fmtTime(g.checkInTime)}. This QR code has already been used.`);
+  if (g.status === 'declined' && !force)
+    return showResult('warn', 'Guest declined the invitation', `${g.name} replied that they can't attend.`, `<div style="margin-top:10px"><button class="btn small" id="forceIn" data-code="${esc(g.code)}">Check in anyway</button></div>`);
+  g.checkedIn = true; g.checkInTime = new Date().toISOString();
+  db.saveGuests(guests);
+  const extra = [g.table ? 'Table ' + g.table : '', g.status === 'confirmed' ? g.pax + ' guest(s)' : 'Did not RSVP'].filter(Boolean).join(' · ');
+  showResult('ok', 'Checked in: ' + g.name, extra || 'Welcome!');
+  renderDashboard();
+}
+$('#result').addEventListener('click', e => { const b = e.target.closest('#forceIn'); if (b) processCheckIn(b.dataset.code, true); });
+$('#manualForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#manualCode').value; if (v.trim()) processCheckIn(v); e.target.reset(); });
+
+async function startScan() {
+  if (scanner) return;
+  scanner = new Html5Qrcode('reader');
+  try {
+    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, txt => {
+      const now = Date.now();
+      if (txt === lastText && now - lastAt < 3000) return; // ignore repeat reads of the same code
+      lastText = txt; lastAt = now; processCheckIn(txt);
+    });
+    $('#btnScan').textContent = 'Stop camera';
+  } catch (err) {
+    scanner = null;
+    showResult('warn', 'Camera not available', 'Allow camera access and open this page through localhost or https. You can still type the guest code below.');
+  }
+}
+async function stopScan() {
+  if (!scanner) return;
+  try { await scanner.stop(); scanner.clear(); } catch {}
+  scanner = null; $('#btnScan').textContent = 'Start camera';
+}
+$('#btnScan').addEventListener('click', () => scanner ? stopScan() : startScan());
+
+/* ---------- Report ---------- */
+function renderReport() {
+  const e = db.event(), c = counts();
+  const list = db.guests().filter(g => g.checkedIn).sort((a, b) => a.checkInTime.localeCompare(b.checkInTime));
+  $('#reportHead').innerHTML = `
+    <p class="muted" style="margin-top:0">${esc(e.couple || 'Wedding')}${e.date ? ' · ' + esc(fmtDate(e.date)) : ''}${e.venue ? ' · ' + esc(e.venue) : ''}</p>
+    <p><strong>${c.checkedIn}</strong> attended of <strong>${c.invited}</strong> invited &nbsp;|&nbsp; ${c.confirmed} confirmed, ${c.declined} declined, ${c.pending} no reply</p>`;
+  $('#reportTable').innerHTML = list.length
+    ? `<table><thead><tr><th>#</th><th>Guest</th><th>Table</th><th>Check-in time</th></tr></thead><tbody>
+       ${list.map((g, i) => `<tr><td>${i + 1}</td><td>${esc(g.name)}</td><td>${esc(g.table) || '–'}</td><td>${esc(fmtTime(g.checkInTime))}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty">No attendance recorded yet.</div>';
+}
+$('#btnPrint').addEventListener('click', () => window.print());
+$('#btnCsv').addEventListener('click', () => {
+  const rows = [['Name', 'Code', 'Table', 'RSVP status', 'Guests', 'Phone', 'Email', 'Checked in', 'Check-in time']];
+  db.guests().forEach(g => rows.push([g.name, g.code, g.table, statusLabel[g.status], g.status === 'confirmed' ? g.pax : '', g.phone, g.email, g.checkedIn ? 'Yes' : 'No', g.checkInTime ? fmtTime(g.checkInTime) : '']));
+  const csv = rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'wedding-attendance.csv'; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ---------- Data tools ---------- */
+$('#btnBackup').addEventListener('click', () => {
+  const data = JSON.stringify({ event: db.event(), guests: db.guests() }, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = 'wedding-backup.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('#btnRestore').addEventListener('click', () => $('#fileRestore').click());
+$('#fileRestore').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.guests)) throw 0;
+      db.saveGuests(d.guests); db.saveEvent(d.event || {}); renderAll(); toast('Backup restored');
+    } catch { alert('That file is not a valid backup.'); }
+  };
+  r.readAsText(f); e.target.value = '';
+});
+$('#btnSample').addEventListener('click', () => {
+  const names = ['Ana Reyes', 'Miguel Santos', 'Carla Dizon', 'Paolo Cruz', 'Lea Mendoza'];
+  const guests = db.guests();
+  names.forEach((n, i) => guests.push({
+    id: String(Date.now() + i), code: genCode(), name: n, email: '', phone: '', table: String(i % 3 + 1),
+    status: 'pending', pax: 1, note: '', respondedAt: null, checkedIn: false, checkInTime: null
+  }));
+  db.saveGuests(guests); renderAll(); toast('Sample guests added');
+});
+$('#btnReset').addEventListener('click', () => {
+  if (confirm('Delete all guests and settings? This cannot be undone.')) {
+    localStorage.removeItem(KEY_G); localStorage.removeItem(KEY_E); renderAll();
+  }
+});
+
+/* ---------- Guest RSVP page ---------- */
+function renderRsvp(code) {
+  $('#adminApp').hidden = true;
+  const app = $('#rsvpApp'); app.hidden = false;
+  const e = db.event();
+  const guests = db.guests();
+  const g = guests.find(x => x.code === code.toUpperCase());
+  const head = `<div class="hero"><h1 style="font-size:clamp(30px,7vw,46px)">${esc(e.couple || 'You are invited')}</h1>
+    <p>${esc([fmtDate(e.date), e.venue].filter(Boolean).join(' at '))}</p></div>`;
+  if (!g) {
+    app.innerHTML = head + `<div class="form-wrap"><div class="card"><h2>Invitation not found</h2><p class="muted">This QR code isn't linked to a guest. Please contact the couple.</p></div></div>`;
+    return;
+  }
+  const done = g.status !== 'pending';
+  app.innerHTML = head + `<div class="form-wrap"><div class="card">
+    <h2>Hello, ${esc(g.name)}</h2>
+    ${done ? `<p class="muted" style="margin-top:0">You replied <strong>${g.status === 'confirmed' ? 'Yes' : 'No'}</strong> on ${esc(fmtTime(g.respondedAt))}. You can change your reply below.</p>`
+           : `<p class="muted" style="margin-top:0">Will you be joining us?</p>`}
+    <form id="rsvpForm">
+      <div class="field"><div class="choice">
+        <label><input type="radio" name="att" value="confirmed" ${g.status === 'confirmed' ? 'checked' : ''} required><span>Yes, I'll be there</span></label>
+        <label><input type="radio" name="att" value="declined" ${g.status === 'declined' ? 'checked' : ''}><span>Sorry, can't make it</span></label>
+      </div></div>
+      <div id="yesFields">
+        <div class="field"><label for="rPax">Number of guests (including you)</label><input type="number" id="rPax" min="1" max="10" value="${esc(g.pax || 1)}"></div>
+        <div class="field"><label for="rPhone">Mobile number</label><input type="tel" id="rPhone" value="${esc(g.phone)}"></div>
+        <div class="field"><label for="rNote">Dietary needs or message for the couple</label><textarea id="rNote">${esc(g.note)}</textarea></div>
+      </div>
+      <button class="btn" type="submit" style="width:100%">Send my reply</button>
+    </form>
+    <div id="rsvpDone" hidden></div>
+  </div></div>`;
+  const toggle = () => $('#yesFields').hidden = (document.querySelector('input[name=att]:checked')?.value === 'declined');
+  $$('input[name=att]').forEach(r => r.addEventListener('change', toggle)); toggle();
+  $('#rsvpForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const all = db.guests(), me = all.find(x => x.code === g.code);
+    me.status = document.querySelector('input[name=att]:checked').value;
+    me.respondedAt = new Date().toISOString();
+    if (me.status === 'confirmed') {
+      me.pax = Math.max(1, Math.min(10, parseInt($('#rPax').value, 10) || 1));
+      me.phone = $('#rPhone').value.trim(); me.note = $('#rNote').value.trim();
+    }
+    db.saveGuests(all);
+    $('#rsvpForm').hidden = true;
+    $('#rsvpDone').hidden = false;
+    $('#rsvpDone').innerHTML = me.status === 'confirmed'
+      ? `<h2>Thank you, ${esc(g.name)}!</h2><p>Your reply is saved. Please show this same QR code at the entrance on the day.</p>`
+      : `<h2>Thank you for letting us know</h2><p>We'll miss you, ${esc(g.name)}.</p>`;
+  });
+}
+
+/* ---------- Init ---------- */
+function renderAll() { renderHeader(); renderDashboard(); renderGuests(); renderReport(); }
+const rsvpCode = new URLSearchParams(location.search).get('rsvp');
+if (rsvpCode) renderRsvp(rsvpCode); else renderAll();
+</script>
+</body>
+</html> 
