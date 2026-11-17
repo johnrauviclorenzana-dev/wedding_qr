@@ -267,15 +267,15 @@
 <!-- ============ GUEST RSVP PAGE ============ -->
 <div id="rsvpApp" hidden></div>
 
-<!-- QR modal -->
+<!-- QR popup (used by the organizer AND by guests after they confirm) -->
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mName">
   <div class="box">
     <h3 id="mName" style="font-size:26px"></h3>
     <div id="qrBox"></div>
     <div class="code" id="mCode"></div>
-    <p class="muted" style="font-size:14px">This one QR code is used for both RSVP and event check-in.</p>
+    <p class="muted" style="font-size:14px" id="mNote"></p>
     <div class="row" style="justify-content:center">
-      <button class="btn" id="mDownload">Download PNG</button>
+      <button class="btn" id="mDownload">Download QR code</button>
       <button class="btn ghost" id="mCopy">Copy RSVP link</button>
       <button class="btn ghost" id="mClose">Close</button>
     </div>
@@ -287,9 +287,9 @@
 const KEY_G = 'wqr_guests', KEY_E = 'wqr_event';
 const db = {
   guests() { try { return JSON.parse(localStorage.getItem(KEY_G)) || []; } catch { return []; } },
-  saveGuests(v) { localStorage.setItem(KEY_G, JSON.stringify(v)); },
+  saveGuests(v) { try { localStorage.setItem(KEY_G, JSON.stringify(v)); } catch {} },
   event() { try { return JSON.parse(localStorage.getItem(KEY_E)) || { couple: '', date: '', venue: '' }; } catch { return { couple: '', date: '', venue: '' }; } },
-  saveEvent(v) { localStorage.setItem(KEY_E, JSON.stringify(v)); }
+  saveEvent(v) { try { localStorage.setItem(KEY_E, JSON.stringify(v)); } catch {} }
 };
 
 /* ---------- Helpers ---------- */
@@ -303,7 +303,17 @@ const genCode = () => {
   return c;
 };
 const baseUrl = () => location.href.split('?')[0].split('#')[0];
-const rsvpLink = g => baseUrl() + '?rsvp=' + g.code;
+
+// The QR link carries the guest's details, so it works on ANY phone
+const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s))));
+const rsvpLink = g => {
+  const e = db.event();
+  const payload = b64e({ n: g.name, t: g.table || '', c: e.couple || '', d: e.date || '', v: e.venue || '' });
+  return baseUrl() + '?rsvp=' + g.code + '&g=' + encodeURIComponent(payload)
+    + (g.status === 'confirmed' ? '&s=c&p=' + (g.pax || 1) : '');
+};
+
 const fmtTime = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
 const fmtDate = d => d ? new Date(d + 'T00:00').toLocaleDateString([], { dateStyle: 'long' }) : '';
 function toast(msg) {
@@ -408,21 +418,32 @@ function renderGuests() {
 $('#guestTable').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.qr) openQr(t.dataset.qr);
-  if (t.dataset.open) window.open(baseUrl() + '?rsvp=' + t.dataset.open, '_blank');
+  if (t.dataset.open) {
+    const g = db.guests().find(x => x.code === t.dataset.open);
+    if (g) window.open(rsvpLink(g), '_blank');
+  }
   if (t.dataset.del && confirm('Delete this guest and their QR code?')) {
     db.saveGuests(db.guests().filter(g => g.id !== t.dataset.del)); renderAll(); toast('Guest deleted');
   }
 });
 
-/* ---------- QR modal ---------- */
+/* ---------- QR popup ---------- */
 let currentQr = null;
-function openQr(code) {
-  const g = db.guests().find(x => x.code === code); if (!g) return;
+function openQrFor(g, guestMode = false) {
   currentQr = g;
-  $('#mName').textContent = g.name; $('#mCode').textContent = g.code;
+  $('#mName').textContent = guestMode ? 'RSVP confirmed, ' + g.name + '!' : g.name;
+  $('#mCode').textContent = g.code;
+  $('#mNote').textContent = guestMode
+    ? 'Download or screenshot this QR code and show it at the entrance on the wedding day.'
+    : 'This one QR code is used for both RSVP and event check-in.';
+  $('#mCopy').hidden = guestMode;
   $('#qrBox').innerHTML = '';
   new QRCode($('#qrBox'), { text: rsvpLink(g), width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
   $('#modal').hidden = false; $('#mClose').focus();
+}
+function openQr(code) {
+  const g = db.guests().find(x => x.code === code);
+  if (g) openQrFor(g, false);
 }
 $('#mClose').addEventListener('click', () => $('#modal').hidden = true);
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').hidden = true; });
@@ -439,19 +460,26 @@ $('#mCopy').addEventListener('click', async () => {
 
 /* ---------- Check-in ---------- */
 let scanner = null, lastText = '', lastAt = 0;
-function extractCode(raw) {
+function scanInfo(raw) {
   raw = String(raw).trim();
-  try { const c = new URL(raw).searchParams.get('rsvp'); if (c) return c.toUpperCase(); } catch {}
-  return raw.toUpperCase();
+  try {
+    const u = new URL(raw);
+    const c = u.searchParams.get('rsvp');
+    if (c) return { code: c.toUpperCase(), confirmed: u.searchParams.get('s') === 'c', pax: parseInt(u.searchParams.get('p'), 10) || 1 };
+  } catch {}
+  return { code: raw.toUpperCase(), confirmed: false, pax: 1 };
 }
 function showResult(kind, title, text, extra = '') {
   $('#result').innerHTML = `<div class="result ${kind}" role="alert"><h3>${esc(title)}</h3><div>${esc(text)}</div>${extra}</div>`;
 }
 function processCheckIn(raw, force = false) {
-  const code = extractCode(raw);
+  const info = scanInfo(raw);
+  const code = info.code;
   const guests = db.guests();
   const g = guests.find(x => x.code === code);
   if (!g) return showResult('bad', 'Not on the guest list', `The code "${code}" doesn't match any invited guest. Do not admit without checking with the couple.`);
+  // The guest's QR carries their "confirmed" reply, so record it here
+  if (info.confirmed && g.status === 'pending') { g.status = 'confirmed'; g.pax = info.pax; g.respondedAt = new Date().toISOString(); }
   if (g.checkedIn) return showResult('warn', 'Already checked in', `${g.name} was checked in on ${fmtTime(g.checkInTime)}. This QR code has already been used.`);
   if (g.status === 'declined' && !force)
     return showResult('warn', 'Guest declined the invitation', `${g.name} replied that they can't attend.`, `<div style="margin-top:10px"><button class="btn small" id="forceIn" data-code="${esc(g.code)}">Check in anyway</button></div>`);
@@ -544,40 +572,29 @@ $('#btnReset').addEventListener('click', () => {
 });
 
 /* ---------- Guest RSVP page ---------- */
-/* ---------- Guest RSVP page ---------- */
-function showGuestQr(g, returning = false) {
-  const box = $('#rsvpDone');
-  box.hidden = false;
-  box.innerHTML = `
-    <div style="text-align:center; ${returning ? 'margin-top:24px; padding-top:20px; border-top:1px solid var(--line)' : ''}">
-      <h2>${returning ? 'Your entry QR code' : 'Thank you, ' + esc(g.name) + '!'}</h2>
-      <p class="muted">${returning ? 'Show this at the entrance on the wedding day.' : 'Your reply is saved. Save this QR code and show it at the entrance on the wedding day.'}</p>
-      <div id="myQr" style="display:flex; justify-content:center; margin:16px 0"></div>
-      <div style="font-family:ui-monospace,Menlo,Consolas,monospace; background:var(--info-bg); display:inline-block; padding:4px 10px; border-radius:6px">${esc(g.code)}</div>
-      <div style="margin-top:16px"><button class="btn" id="btnDlQr" type="button">Download QR code</button></div>
-    </div>`;
-  new QRCode($('#myQr'), { text: rsvpLink(g), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
-  $('#btnDlQr').addEventListener('click', () => {
-    const canvas = $('#myQr canvas'); if (!canvas) return;
-    const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
-    a.download = 'My-Wedding-QR-' + g.name.replace(/\s+/g, '_') + '.png';
-    a.click();
-  });
-}
-
 function renderRsvp(code) {
   $('#adminApp').hidden = true;
   const app = $('#rsvpApp'); app.hidden = false;
-  const e = db.event();
-  const guests = db.guests();
-  const g = guests.find(x => x.code === code.toUpperCase());
+  code = code.toUpperCase();
+
+  // Guest details come from the link itself, so this works on any phone
+  let P = null;
+  try { const raw = new URLSearchParams(location.search).get('g'); if (raw) P = b64d(raw); } catch {}
+  const e = P ? { couple: P.c || '', date: P.d || '', venue: P.v || '' } : db.event();
+
+  let g = db.guests().find(x => x.code === code);
+  if (!g && P) g = {
+    id: 'ext-' + code, code, name: P.n || 'Guest', table: P.t || '', email: '', phone: '',
+    status: 'pending', pax: 1, note: '', respondedAt: null, checkedIn: false, checkInTime: null
+  };
+
   const head = `<div class="hero"><h1 style="font-size:clamp(30px,7vw,46px)">${esc(e.couple || 'You are invited')}</h1>
     <p>${esc([fmtDate(e.date), e.venue].filter(Boolean).join(' at '))}</p></div>`;
   if (!g) {
-    app.innerHTML = head + `<div class="form-wrap"><div class="card"><h2>Invitation not found</h2><p class="muted">This QR code isn't linked to a guest. Please contact the couple.</p></div></div>`;
+    app.innerHTML = head + `<div class="form-wrap"><div class="card"><h2>Invitation not found</h2><p class="muted">This link is not valid. Please ask the couple to send your QR code again.</p></div></div>`;
     return;
   }
+
   const done = g.status !== 'pending';
   app.innerHTML = head + `<div class="form-wrap"><div class="card">
     <h2>Hello, ${esc(g.name)}</h2>
@@ -601,12 +618,26 @@ function renderRsvp(code) {
   const toggle = () => $('#yesFields').hidden = (document.querySelector('input[name=att]:checked')?.value === 'declined');
   $$('input[name=att]').forEach(r => r.addEventListener('change', toggle)); toggle();
 
-  // Already confirmed earlier? Show their QR code right away.
-  if (g.status === 'confirmed') showGuestQr(g, true);
+  const showDone = (me, fresh) => {
+    const box = $('#rsvpDone'); box.hidden = false;
+    if (me.status === 'confirmed') {
+      box.innerHTML = `<div style="text-align:center;${fresh ? '' : 'margin-top:22px;padding-top:20px;border-top:1px solid var(--line)'}">
+        ${fresh ? `<h2>Thank you, ${esc(me.name)}!</h2><p class="muted">Your reply is saved. Show your QR code at the entrance on the wedding day.</p>` : ''}
+        <button class="btn" id="btnShowQr" type="button">Show my QR code</button></div>`;
+      $('#btnShowQr').addEventListener('click', () => openQrFor(me, true));
+    } else {
+      box.innerHTML = `<h2>Thank you for letting us know</h2><p>We'll miss you, ${esc(me.name)}.</p>`;
+    }
+  };
+
+  // Already confirmed earlier? Offer the QR code right away.
+  if (g.status === 'confirmed') showDone(g, false);
 
   $('#rsvpForm').addEventListener('submit', ev => {
     ev.preventDefault();
-    const all = db.guests(), me = all.find(x => x.code === g.code);
+    const all = db.guests();
+    let me = all.find(x => x.code === g.code);
+    if (!me) { me = { ...g }; all.push(me); }   // keep a copy on the guest's own phone
     me.status = document.querySelector('input[name=att]:checked').value;
     me.respondedAt = new Date().toISOString();
     if (me.status === 'confirmed') {
@@ -615,12 +646,8 @@ function renderRsvp(code) {
     }
     db.saveGuests(all);
     $('#rsvpForm').hidden = true;
-    if (me.status === 'confirmed') {
-      showGuestQr(g);
-    } else {
-      $('#rsvpDone').hidden = false;
-      $('#rsvpDone').innerHTML = `<h2>Thank you for letting us know</h2><p>We'll miss you, ${esc(g.name)}.</p>`;
-    }
+    showDone(me, true);
+    if (me.status === 'confirmed') openQrFor(me, true);   // ← the QR popup
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
@@ -631,4 +658,4 @@ const rsvpCode = new URLSearchParams(location.search).get('rsvp');
 if (rsvpCode) renderRsvp(rsvpCode); else renderAll();
 </script>
 </body>
-</html> 
+</html>
